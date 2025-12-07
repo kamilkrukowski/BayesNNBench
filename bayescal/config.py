@@ -24,13 +24,13 @@ class Settings(BaseSettings):
 
     # Training settings
     seed: int = 42
-    batch_size: int = 128
-    num_epochs: int = 100
+    batch_size: int = 512
+    num_epochs: int = 10
     learning_rate: float = 1e-3
 
     # Model settings
-    hidden_dim: int = 128
-    num_layers: int = 2
+    hidden_dim: int = 32
+    num_layers: int = 3
 
     # Bayesian settings
     prior_std: float = 1.0
