@@ -70,11 +70,19 @@ class FFN(nn.Module):
 
         Args:
             rng: Random number generator
-            input_shape: Shape of input data
+            input_shape: Shape of input data (without batch dimension).
 
         Returns:
             Initialized parameters
         """
-        dummy_input = jnp.ones((1, *input_shape))
-        return self.init(rng, dummy_input, training=True)
+        # Extract feature dimension from input_shape
+        if len(input_shape) == 1:
+            input_dim = input_shape[0]
+        else:
+            input_dim = int(jnp.prod(jnp.array(input_shape)))
+        
+        # Create dummy input for initialization: (batch_size=1, features)
+        dummy_input = jnp.zeros((1, input_dim), dtype=jnp.float32)
+        rng1, rng2 = jax.random.split(rng)
+        return self.init(rng1, dummy_input, rng2, training=True)
 

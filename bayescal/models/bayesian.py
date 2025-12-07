@@ -2,9 +2,9 @@
 
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 from flax import linen as nn
+
 
 class BayesianMLP(nn.Module):
     """
@@ -28,7 +28,6 @@ class BayesianMLP(nn.Module):
     def __call__(
         self,
         inputs: jnp.ndarray,
-        rng: Any,
         training: bool = True,
     ) -> jnp.ndarray:
         """
@@ -36,7 +35,6 @@ class BayesianMLP(nn.Module):
 
         Args:
             inputs: Input data
-            rng: Random number generator
             training: Whether in training mode
 
         Returns:
@@ -60,11 +58,18 @@ class BayesianMLP(nn.Module):
 
         Args:
             rng: Random number generator
-            input_shape: Shape of input data
+            input_shape: Shape of input data (without batch dimension).
 
         Returns:
             Initialized parameters
         """
-        dummy_input = jnp.ones((1, *input_shape))
+        # Extract feature dimension from input_shape
+        if len(input_shape) == 1:
+            input_dim = input_shape[0]
+        else:
+            input_dim = int(jnp.prod(jnp.array(input_shape)))
+        
+        # Create dummy input for initialization: (batch_size=1, features)
+        dummy_input = jnp.zeros((1, input_dim), dtype=jnp.float32)
         return self.init(rng, dummy_input, training=True)
 
