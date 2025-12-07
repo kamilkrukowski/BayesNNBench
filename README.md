@@ -1,6 +1,6 @@
 # BayesCal: Bayesian Neural Network Calibration Research
 
-A research project demonstrating Bayesian Neural Networks using Bayes by Backprop, comparing calibration performance against traditional neural networks with dropout.
+A research project demonstrating Bayesian Neural Networks using Bayes by Backprop, comparing calibration performance against feedforward neural networks with dropout.
 
 ## Project Structure
 
@@ -24,9 +24,8 @@ bayescal/
 │   │
 │   ├── models/              # Neural network models
 │   │   ├── __init__.py
-│   │   ├── base.py          # Base model interfaces
 │   │   ├── bayesian.py      # Bayes by Backprop implementation
-│   │   ├── traditional.py   # Traditional NN with dropout
+│   │   ├── feedforward.py   # Feedforward NN with dropout
 │   │   └── layers/          # Custom JAX layers
 │   │       ├── __init__.py
 │   │       └── bayesian_layer.py  # Custom Bayesian layer
@@ -103,5 +102,5 @@ python scripts/compare.py
 - **Custom JAX Layers**: Registered custom layers for Bayesian inference
 - **Calibration Metrics**: ECE, Brier score, and calibration curves
 - **OOD Detection**: Out-of-distribution detection on Fashion-MNIST
-- **Comparison Framework**: Systematic comparison with dropout-based models
+- **Comparison Framework**: Systematic comparison with feedforward dropout-based models
 

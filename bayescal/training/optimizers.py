@@ -25,4 +25,3 @@ def get_optimizer(
         return optax.adamw(learning_rate)
     else:
         raise ValueError(f"Unknown optimizer type: {optimizer_type}")
-
