@@ -36,7 +36,9 @@ def train_step(
     rng, step_rng = jax.random.split(rng)
 
     def loss_fn(p: dict[str, Any]) -> tuple[jnp.ndarray, dict[str, float]]:
-        probs = model.apply(p, inputs, step_rng, training=True)
+        # Both models now require rng parameter
+        # Use n_samples=1 for training efficiency
+        probs = model.apply(p, inputs=inputs, rng=step_rng, training=True, n_samples=1)
         # Cross-entropy loss: -sum(y * log(p))
         log_probs = jnp.log(probs + 1e-8)  # Add small epsilon for numerical stability
         loss = -jnp.sum(labels * log_probs, axis=-1).mean()
