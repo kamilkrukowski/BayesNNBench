@@ -2,8 +2,11 @@
 
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 from flax import linen as nn
+
+from bayescal.models.layers.bayesian_layer import BayesianDense
 
 
 class BayesianMLP(nn.Module):
@@ -21,32 +24,78 @@ class BayesianMLP(nn.Module):
     def setup(self) -> None:
         """Initialize model layers."""
         self.layers = [
-            nn.Dense(dim) for dim in self.hidden_dims
+            BayesianDense(
+                features=dim,
+                prior_std=self.prior_std,
+                posterior_std_init=self.posterior_std_init,
+            )
+            for dim in self.hidden_dims
         ]
         self.output_layer = nn.Dense(self.num_classes)
 
-    def __call__(
+    def _forward_single(
         self,
         inputs: jnp.ndarray,
+        rng: Any,
         training: bool = True,
     ) -> jnp.ndarray:
         """
-        Forward pass through the Bayesian MLP.
+        Single forward pass through the Bayesian MLP.
 
         Args:
-            inputs: Input data
+            inputs: Input data of shape (batch_size, input_dim)
+            rng: Random number generator for Bayesian layer sampling
             training: Whether in training mode
 
         Returns:
             Class probabilities of shape (batch_size, num_classes)
         """
         x = inputs
-        for layer in self.layers:
-            x = layer(x)
+        rngs = jax.random.split(rng, len(self.layers))
+        
+        for layer, layer_rng in zip(self.layers, rngs):
+            x = layer(x, layer_rng, training=training)
             x = nn.relu(x)
+        
         logits = self.output_layer(x)
         probs = nn.softmax(logits)
         return probs
+
+    def __call__(
+        self,
+        inputs: jnp.ndarray,
+        rng: Any,
+        training: bool = True,
+        n_samples: int = 1,
+    ) -> jnp.ndarray:
+        """
+        Forward pass through the Bayesian MLP with Monte Carlo sampling.
+
+        Args:
+            inputs: Input data of shape (batch_size, input_dim)
+            rng: Random number generator for Bayesian layer sampling
+            training: Whether in training mode
+            n_samples: Number of Monte Carlo samples to draw. For training, use 1.
+                       For inference, use >1 to get better uncertainty estimates.
+
+        Returns:
+            Class probabilities of shape (batch_size, num_classes).
+            If n_samples > 1, returns mean probabilities across samples.
+        """
+        if n_samples == 1:
+            return self._forward_single(inputs, rng, training=training)
+        
+        # Multiple samples (for inference/uncertainty estimation)
+        sample_rngs = jax.random.split(rng, n_samples)
+        all_probs = [
+            self._forward_single(inputs, sample_rng, training=training)
+            for sample_rng in sample_rngs
+        ]
+        
+        # Stack and average: (n_samples, batch_size, num_classes) -> (batch_size, num_classes)
+        all_probs = jnp.stack(all_probs)  # (n_samples, batch_size, num_classes)
+        mean_probs = jnp.mean(all_probs, axis=0)  # (batch_size, num_classes)
+        return mean_probs
 
     def init_params(
         self,
@@ -71,5 +120,6 @@ class BayesianMLP(nn.Module):
         
         # Create dummy input for initialization: (batch_size=1, features)
         dummy_input = jnp.zeros((1, input_dim), dtype=jnp.float32)
-        return self.init(rng, dummy_input, training=True)
+        rng1, rng2 = jax.random.split(rng)
+        return self.init(rng1, dummy_input, rng2, training=True)
 

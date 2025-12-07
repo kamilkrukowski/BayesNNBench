@@ -12,26 +12,14 @@ class BayesianDense(nn.Module):
     Bayesian dense layer using Bayes by Backprop.
 
     This layer maintains a distribution over weights rather than point estimates.
+    Uses Flax's compact pattern to infer input dimension from first call.
     """
 
     features: int
     prior_std: float = 1.0
     posterior_std_init: float = 0.1
 
-    def setup(self) -> None:
-        """Initialize layer parameters."""
-        # Posterior parameters (mean and log std)
-        self.mean = self.param(
-            "mean",
-            nn.initializers.normal(stddev=0.1),
-            (self.features,),
-        )
-        self.log_std = self.param(
-            "log_std",
-            lambda rng, shape: jnp.full(shape, jnp.log(self.posterior_std_init)),
-            (self.features,),
-        )
-
+    @nn.compact
     def __call__(
         self,
         inputs: jnp.ndarray,
@@ -42,21 +30,36 @@ class BayesianDense(nn.Module):
         Forward pass with reparameterization trick.
 
         Args:
-            inputs: Input tensor
+            inputs: Input tensor of shape (batch, input_dim)
             rng: Random number generator
             training: Whether in training mode
 
         Returns:
-            Output tensor
+            Output tensor of shape (batch, features)
         """
+        input_dim = inputs.shape[-1]
+        weight_shape = (input_dim, self.features)
+        
+        # Define parameters (Flax will initialize on first call)
+        mean = self.param(
+            "mean",
+            nn.initializers.normal(stddev=0.1),
+            weight_shape,
+        )
+        log_std = self.param(
+            "log_std",
+            lambda rng, shape: jnp.full(shape, jnp.log(self.posterior_std_init)),
+            weight_shape,
+        )
+        
         if training:
-            # Sample weights from posterior
-            std = jnp.exp(self.log_std)
-            eps = jax.random.normal(rng, self.mean.shape)
-            weights = self.mean + std * eps
+            # Sample weights from posterior using reparameterization trick
+            std = jnp.exp(log_std)
+            eps = jax.random.normal(rng, weight_shape)
+            weights = mean + std * eps
         else:
             # Use mean weights during inference
-            weights = self.mean
+            weights = mean
 
         return inputs @ weights
 
