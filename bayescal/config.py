@@ -24,20 +24,28 @@ class Settings(BaseSettings):
 
     # Training settings
     seed: int = 42
-    batch_size: int = 512
-    num_epochs: int = 10
-    learning_rate: float = 1e-3
-
-    # Model settings
-    hidden_dim: int = 32
-    num_layers: int = 3
+    batch_size: int = 4096
+    num_epochs: int = 2000
+    learning_rate: float = 1.0e-2
+    downsample_training_factor: float = 0.1  # Fraction of training data to use (1.0 = use all, 0.5 = use half)
+    
+    # CNN settings
+    # Each tuple is (kernel_x, kernel_y, num_filters, stride)
+    conv_layers: tuple[tuple[int, int, int, int], ...] = (
+        (4, 4, 16, 8),  # First conv: 6x6 kernel, 32 filters, stride 4
+    )
+    group_norm_groups: int = 1  # Number of groups for GroupNorm
+    dropout_rate: float = 0.2  # Dropout rate for DropoutCNN models
 
     # Bayesian settings
     prior_std: float = 1.0
     posterior_std_init: float = 0.1
+    n_vi_samples: int = 1  # Number of samples for variational inference during training
+    beta: float = 0.00005  # Beta for beta-VI (KL penalty weight). Lower values allow more learning.
+    max_grad_norm: float | None = 1.0  # Maximum gradient norm for clipping. None to disable. Recommended: 1.0 for Bayesian models.
 
     # Evaluation settings
-    num_samples: int = 100  # For MC sampling in Bayesian models
+    num_samples: int = 32  # For MC sampling in Bayesian models
     num_bins: int = 10  # For calibration metrics
 
     def model_post_init(self, __context: Any) -> None:
