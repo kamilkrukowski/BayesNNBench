@@ -1,7 +1,16 @@
 """Neural network models."""
 
-from bayescal.models import bayesian, feedforward
-from bayescal.models.layers import bayesian_layer
+from bayescal.models.bayescnn import BayesianCNN
+from bayescal.models.bayesffn import BayesianFNN
+from bayescal.models.cnn import CNN, DropoutCNN
+from bayescal.models.fnn import FNN, DropoutFNN
 
-__all__ = ["bayesian", "feedforward", "bayesian_layer"]
+__all__ = [
+    "BayesianCNN",
+    "BayesianFNN",
+    "CNN",
+    "DropoutCNN",
+    "FNN",
+    "DropoutFNN",
+]
 
