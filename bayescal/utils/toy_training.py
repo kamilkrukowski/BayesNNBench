@@ -117,6 +117,7 @@ def evaluate_model(
     n_samples: int = 1,
     model_name: str = "",
     seed: int = 42,
+    num_bins: int = 10,
 ) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, float], np.ndarray, np.ndarray]:
     """
     Evaluate model and return predictions, labels, and metrics.
@@ -129,7 +130,7 @@ def evaluate_model(
         n_samples: Number of MC samples for evaluation
         model_name: Name of the model (for logging, optional)
         seed: Random seed
-
+        num_bins: Number of bins for calibration curve
     Returns:
         Tuple of (predictions, labels, metrics_dict, fraction_of_positives, mean_predicted_value)
     """
@@ -149,13 +150,13 @@ def evaluate_model(
     true_classes = jnp.argmax(y_test_jax, axis=-1)
     accuracy = (predicted_classes == true_classes).mean()
 
-    ece = calibration.expected_calibration_error(probs, y_test_jax)
-    mce = calibration.maximum_calibration_error(probs, y_test_jax)
+    ece = calibration.expected_calibration_error(probs, y_test_jax, num_bins=num_bins)
+    mce = calibration.maximum_calibration_error(probs, y_test_jax, num_bins=num_bins)
     brier = calibration.brier_score(probs, y_test_jax)
 
     # Calibration curve
     fraction_of_positives, mean_predicted_value = calibration.calibration_curve(
-        probs, y_test_jax, prune_small_bins=False
+        probs, y_test_jax, prune_small_bins=False, num_bins=num_bins
     )
 
     metrics = {

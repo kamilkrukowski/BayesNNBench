@@ -11,6 +11,113 @@ from matplotlib.lines import Line2D
 from sklearn.model_selection import train_test_split
 
 
+def plot_toy_dataset(
+    X: np.ndarray,
+    y: np.ndarray,
+    n_plot_points: int = 2000,
+    seed: int = 42,
+    figures_dir: Path | None = None,
+) -> None:
+    """
+    Visualize the toy dataset as a scatter plot.
+
+    Args:
+        X: Feature array (n_samples, 2)
+        y: Labels array (n_samples,)
+        n_plot_points: Number of points to plot (subsampled if larger)
+        seed: Random seed for subsampling
+        figures_dir: Directory to save figures (optional)
+    """
+    # Subsample if large
+    if len(X) > n_plot_points:
+        _, X_plot, _, y_plot = train_test_split(
+            X, y, test_size=n_plot_points / len(X), random_state=seed, stratify=y
+        )
+    else:
+        X_plot, y_plot = X, y
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    scatter = ax.scatter(
+        X_plot[:, 0],
+        X_plot[:, 1],
+        c=y_plot,
+        cmap="coolwarm",
+        alpha=0.5,
+        s=15,
+        edgecolors="black",
+        linewidths=0.3,
+    )
+    ax.set_xlabel("Feature 1", fontsize=12)
+    ax.set_ylabel("Feature 2", fontsize=12)
+    ax.set_title(
+        "Toy Dataset: 2-Class Overlapping Gaussians", fontsize=14, fontweight="bold"
+    )
+    ax.legend(*scatter.legend_elements(), title="Class", loc="upper right")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if figures_dir:
+        plt.savefig(figures_dir / "toy_dataset.png", dpi=150, bbox_inches="tight")
+    plt.show()
+
+
+def plot_calibration_curves_comparison(
+    model_results: list[dict[str, Any]],
+    figures_dir: Path | None = None,
+) -> None:
+    """
+    Plot calibration curves for multiple models on the same figure.
+
+    Args:
+        model_results: List of dictionaries, each containing:
+            - 'mpv': Mean predicted value array
+            - 'fop': Fraction of positives array
+            - 'ece': Expected calibration error (float)
+            - 'label': Model label string
+            - 'color': Color for the plot (optional)
+            - 'marker': Marker style (optional, default 'o')
+        figures_dir: Directory to save figures (optional)
+    """
+    # Default colors and markers if not provided
+    default_colors = ["#F18F01", "#A23B72", "#2E86AB", "#C73E1D", "#6A994E"]
+    default_markers = ["o", "s", "^", "D", "v"]
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+
+    for i, result in enumerate(model_results):
+        color = result.get("color", default_colors[i % len(default_colors)])
+        marker = result.get("marker", default_markers[i % len(default_markers)])
+        label = result.get("label", f"Model {i+1}")
+        ece = result.get("ece", 0.0)
+
+        ax.plot(
+            result["mpv"],
+            result["fop"],
+            f"{marker}-",
+            label=f"{label} (ECE: {ece:.3f})",
+            color=color,
+            linewidth=2,
+            markersize=8,
+            alpha=0.8,
+        )
+
+    # Perfect calibration line
+    ax.plot([0.0, 1], [0.0, 1], "k--", label="Perfect calibration", linewidth=2, alpha=0.7)
+
+    ax.set_xlabel("Mean Predicted Probability", fontsize=12)
+    ax.set_ylabel("Fraction of Positives", fontsize=12)
+    ax.set_title("Calibration Curves Comparison", fontsize=14, fontweight="bold")
+    ax.legend(loc="lower right", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim([0.35, 1])
+    ax.set_ylim([0.35, 1])
+    plt.tight_layout()
+    if figures_dir:
+        plt.savefig(
+            figures_dir / "calibration_curves_comparison.png", dpi=150, bbox_inches="tight"
+        )
+    plt.show()
+
+
 def plot_single_sample_predictions(
     model: Any,
     params: dict[str, Any],
@@ -158,7 +265,8 @@ def plot_predictive_posterior(
     n_plot_points: int = 2000,
     seed: int = 42,
     figures_dir: Path | None = None,
-) -> None:
+    ax: Any | None = None,
+) -> Any:
     """
     Plot predictive posterior over the input space.
 
@@ -172,6 +280,10 @@ def plot_predictive_posterior(
         n_plot_points: Number of test points to plot (subsampled if larger)
         seed: Random seed
         figures_dir: Directory to save figures (optional)
+        ax: Matplotlib axes to plot on. If None, creates a new figure.
+
+    Returns:
+        The axes object used for plotting (for subplot compatibility)
     """
     # Subsample test set for visualization
     if len(X_test) > n_plot_points:
@@ -203,8 +315,13 @@ def plot_predictive_posterior(
     )
     probs_class1 = np.array(probs[:, 1]).reshape(xx.shape)
 
-    # Plot: Single plot with probability contour and overlaid decision boundary
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    # Create figure/axes if not provided
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+        created_figure = True
+    else:
+        created_figure = False
+        fig = ax.figure
 
     # Probability contour
     contour = ax.contourf(xx, yy, probs_class1, levels=20, cmap="coolwarm", alpha=0.8)
@@ -234,8 +351,11 @@ def plot_predictive_posterior(
         f"{model_name}: Predictive Probability P(Class=1)", fontsize=12, fontweight="bold"
     )
 
-    # Colorbar for probability
-    plt.colorbar(contour, ax=ax, label="P(Class=1)")
+    # Colorbar for probability - use fig.colorbar when ax is provided
+    if created_figure:
+        plt.colorbar(contour, ax=ax, label="P(Class=1)")
+    else:
+        fig.colorbar(contour, ax=ax, label="P(Class=1)")
 
     # Legend for decision boundary
     boundary_line = Line2D(
@@ -248,15 +368,19 @@ def plot_predictive_posterior(
     )
     ax.legend(handles=[boundary_line], loc="upper right", fontsize=11)
 
-    plt.tight_layout()
-    if figures_dir:
-        model_name_safe = model_name.lower().replace(" ", "_")
-        plt.savefig(
-            figures_dir / f"{model_name_safe}_predictive_posterior_mc{n_samples}.png",
-            dpi=150,
-            bbox_inches="tight",
-        )
-    plt.show()
+    # Only save/show if we created the figure
+    if created_figure:
+        plt.tight_layout()
+        if figures_dir:
+            model_name_safe = model_name.lower().replace(" ", "_")
+            plt.savefig(
+                figures_dir / f"{model_name_safe}_predictive_posterior_mc{n_samples}.png",
+                dpi=150,
+                bbox_inches="tight",
+            )
+        plt.show()
+
+    return ax
 
 
 def plot_uncertainty(
