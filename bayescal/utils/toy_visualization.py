@@ -1,7 +1,9 @@
 """Visualization utilities for toy dataset experiments."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
 from sklearn.model_selection import train_test_split
+
+if TYPE_CHECKING:
+    from bayescal.utils.model_result import ModelResult
 
 
 def plot_toy_dataset(
@@ -650,3 +655,141 @@ def plot_uncertainty(
         plt.show()
 
     return ax
+
+
+# =============================================================================
+# High-level wrappers for ModelResult objects
+# =============================================================================
+
+
+def plot_calibration_comparison(
+    results: list[ModelResult],
+    figures_dir: Path | None = None,
+    metric: str = "tce",
+    num_bins: int = 15,
+) -> None:
+    """
+    Plot calibration curves for multiple ModelResult objects.
+
+    This is a convenience wrapper around plot_calibration_curves_comparison
+    that automatically extracts data from ModelResult objects.
+
+    Args:
+        results: List of evaluated ModelResult objects
+        figures_dir: Directory to save figures (optional)
+        metric: Which metric to display ('ece', 'ace', 'tce', 'all')
+        num_bins: Number of bins for calibration curve
+    """
+    model_dicts = [r.to_calibration_dict() for r in results]
+    plot_calibration_curves_comparison(model_dicts, figures_dir, metric, num_bins)
+
+
+def plot_posterior_grid(
+    results: list[ModelResult],
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    seed: int = 42,
+    figures_dir: Path | None = None,
+    vmin: float = 0.0,
+    vmax: float = 1.0,
+) -> None:
+    """
+    Plot predictive posteriors for all models in a single row of subplots.
+
+    Args:
+        results: List of evaluated ModelResult objects
+        X_test: Test features
+        y_test: Test labels (not one-hot)
+        seed: Random seed
+        figures_dir: Directory to save figures (optional)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+    """
+    n_models = len(results)
+    fig, axes = plt.subplots(1, n_models, figsize=(6 * n_models, 6))
+
+    # Handle single model case
+    if n_models == 1:
+        axes = [axes]
+
+    for ax, r in zip(axes, results):
+        plot_predictive_posterior(
+            r.model,
+            r.params,
+            X_test,
+            y_test,
+            r.name,
+            n_samples=r.n_samples,
+            seed=seed,
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+        )
+
+    plt.tight_layout()
+    if figures_dir:
+        plt.savefig(
+            figures_dir / "predictive_posterior_comparison.png",
+            dpi=150,
+            bbox_inches="tight",
+        )
+    plt.show()
+
+
+def plot_uncertainty_grid(
+    results: list[ModelResult],
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    seed: int = 42,
+    figures_dir: Path | None = None,
+    vmin: float = 0.0,
+    vmax: float | None = None,
+    log_scale: bool = False,
+) -> None:
+    """
+    Plot uncertainty (entropy) for all models in a single row of subplots.
+
+    Args:
+        results: List of evaluated ModelResult objects
+        X_test: Test features
+        y_test: Test labels (not one-hot)
+        seed: Random seed
+        figures_dir: Directory to save figures (optional)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale (default: log(2) for binary entropy)
+        log_scale: If True, apply log transform to entropy values
+    """
+    # Default vmax to max binary entropy
+    if vmax is None:
+        vmax = np.log(2)
+
+    n_models = len(results)
+    fig, axes = plt.subplots(1, n_models, figsize=(6 * n_models, 6))
+
+    # Handle single model case
+    if n_models == 1:
+        axes = [axes]
+
+    for ax, r in zip(axes, results):
+        plot_uncertainty(
+            r.model,
+            r.params,
+            X_test,
+            y_test,
+            r.name,
+            n_samples=r.n_samples,
+            seed=seed,
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+            log_scale=log_scale,
+        )
+
+    plt.tight_layout()
+    if figures_dir:
+        plt.savefig(
+            figures_dir / "uncertainty_entropy_comparison.png",
+            dpi=150,
+            bbox_inches="tight",
+        )
+    plt.show()

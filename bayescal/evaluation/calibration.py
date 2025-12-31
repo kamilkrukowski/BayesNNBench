@@ -1,6 +1,5 @@
 """Calibration metrics: ECE, Brier score, and calibration curves."""
 
-
 import jax.numpy as jnp
 import numpy as np
 

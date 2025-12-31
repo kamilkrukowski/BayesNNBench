@@ -1,6 +1,5 @@
 """Data loaders for CIFAR-10, OOD datasets, and synthetic datasets."""
 
-
 import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf

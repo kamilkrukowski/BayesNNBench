@@ -63,7 +63,9 @@ class CNN(nn.Module):
         """
         x = inputs
 
-        for i, (conv, norm) in enumerate(zip(self.conv_layers, self.norm_layers, strict=False)):
+        for i, (conv, norm) in enumerate(
+            zip(self.conv_layers, self.norm_layers, strict=False)
+        ):
             x = conv(x)
             x = norm(x)
             x = nn.relu(x)
@@ -211,7 +213,13 @@ class DropoutCNN(nn.Module):
         rngs = jax.random.split(rng, len(self.conv_layers))
 
         for i, (conv, norm, dropout, rng_key) in enumerate(
-            zip(self.conv_layers, self.norm_layers, self.dropout_layers, rngs, strict=False)
+            zip(
+                self.conv_layers,
+                self.norm_layers,
+                self.dropout_layers,
+                rngs,
+                strict=False,
+            )
         ):
             x = conv(x)
             x = norm(x)
