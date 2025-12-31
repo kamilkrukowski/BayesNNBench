@@ -20,6 +20,7 @@ class BayesianDense(nn.Module):
     features: int
     prior_std: float = 1.0
     posterior_std_init: float = 0.1
+    max_std: float = 0.1  # Maximum allowed standard deviation (caps sigma to prevent excessive noise)
 
     @nn.compact
     def __call__(
@@ -43,8 +44,10 @@ class BayesianDense(nn.Module):
         """
         input_dim = inputs.shape[-1]
         weight_shape = (input_dim, self.features)
+        bias_shape = (self.features,)
         
         # Define parameters (Flax will initialize on first call)
+        # Weight mean and log_std
         mean = self.param(
             "mean",
             nn.initializers.normal(stddev=0.1),
@@ -55,9 +58,15 @@ class BayesianDense(nn.Module):
             lambda rng, shape: jnp.full(shape, jnp.log(self.posterior_std_init)),
             weight_shape,
         )
+        # Bias (deterministic, like standard Dense layers)
+        bias = self.param(
+            "bias",
+            nn.initializers.zeros,
+            bias_shape,
+        )
         
         # Use jax.lax.cond for JIT-compatible conditional execution
-        def training_forward(inputs, rng, mean, log_std):
+        def training_forward(inputs, rng, mean, log_std, bias):
             """
             Training mode: Local Reparameterization Trick (LRT) for dense layers.
             
@@ -65,15 +74,20 @@ class BayesianDense(nn.Module):
             the output activations. This is more memory efficient and faster.
             
             For dense(x, W) where W ~ N(μ, σ²) with independent weights:
-            - Mean output: x @ μ
+            - Mean output: x @ μ + bias
             - Variance output: x² @ σ² (element-wise square of inputs, element-wise square of std)
             - Sample: mean + sqrt(variance) * ε
             """
+            # Cap log_std to prevent sigma from exceeding max_std
+            # This ensures sigma = exp(log_std) <= max_std
+            # By clamping log_std, we prevent the parameter from growing unbounded
+            max_log_std = jnp.log(self.max_std + 1e-8)  # log(max_std) to cap log_std
+            log_std = jnp.clip(log_std, -10.0, max_log_std)  # Also cap lower bound for stability
             std = jnp.exp(log_std)
             std_sq = std ** 2  # Variance of weights
             
-            # Compute mean output: inputs @ mean_weights
-            mean_output = inputs @ mean
+            # Compute mean output: inputs @ mean_weights + bias
+            mean_output = inputs @ mean + bias
             
             # Compute variance output: (inputs²) @ (std²)
             # For dense layer: Var[y] = sum(x² * σ²) where x² is element-wise square
@@ -88,14 +102,14 @@ class BayesianDense(nn.Module):
             
             return sampled_output
 
-        def mean_forward(inputs, mean):
+        def mean_forward(inputs, mean, bias):
             """Use mean weights (deterministic)."""
-            return inputs @ mean
+            return inputs @ mean + bias
 
         # Use jax.lax.cond for JIT-compatible conditional execution
         return jax.lax.cond(
             sample,
-            lambda: training_forward(inputs, rng, mean, log_std),
-            lambda: mean_forward(inputs, mean),
+            lambda: training_forward(inputs, rng, mean, log_std, bias),
+            lambda: mean_forward(inputs, mean, bias),
         )
 

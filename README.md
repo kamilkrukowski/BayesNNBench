@@ -19,7 +19,7 @@ bayescal/
 │   │
 │   ├── data/                # Data handling
 │   │   ├── __init__.py
-│   │   ├── loaders.py       # Data loaders (MNIST, Fashion-MNIST)
+│   │   ├── loaders.py       # Data loaders (CIFAR-10, CIFAR-100, toy dataset)
 │   │   └── preprocessing.py # Data preprocessing utilities
 │   │
 │   ├── models/              # Neural network models
@@ -28,7 +28,8 @@ bayescal/
 │   │   ├── feedforward.py   # Feedforward NN with dropout
 │   │   └── layers/          # Custom JAX layers
 │   │       ├── __init__.py
-│   │       └── bayesian_layer.py  # Custom Bayesian layer
+│   │       ├── bayesiandense.py  # Bayesian Dense layer
+│   │       └── bayesianconv2d.py  # Bayesian Conv2D layer
 │   │
 │   ├── training/            # Training logic
 │   │   ├── __init__.py
@@ -43,7 +44,8 @@ bayescal/
 │   ├── utils/               # Utility functions
 │   │   ├── __init__.py
 │   │   ├── logging.py       # Logging configuration
-│   │   └── visualization.py # Plotting utilities
+│   │   ├── visualization.py # Plotting utilities
+│   │   └── toy_dataset.py  # Toy dataset analysis utilities
 │   │
 │   └── api/                 # FastAPI application (if needed)
 │       ├── __init__.py
@@ -56,7 +58,7 @@ bayescal/
 │   └── compare.py           # Comparison script
 │
 ├── notebooks/               # Jupyter notebooks for exploration
-│   └── exploration.ipynb
+│   └── toy.ipynb            # Toy dataset demonstration and analysis
 │
 ├── tests/                   # Test suite
 │   ├── __init__.py
@@ -101,6 +103,5 @@ python scripts/compare.py
 - **Bayesian Neural Networks**: Implementation of Bayes by Backprop
 - **Custom JAX Layers**: Registered custom layers for Bayesian inference
 - **Calibration Metrics**: ECE, Brier score, and calibration curves
-- **OOD Detection**: Out-of-distribution detection on Fashion-MNIST
 - **Comparison Framework**: Systematic comparison with feedforward dropout-based models
 

@@ -93,6 +93,7 @@ class FNN(nn.Module):
         labels: jnp.ndarray,
         rng: Any,
         n_vi_samples: int = 1,  # Unused, kept for API consistency
+        n_train: int | None = None,  # Unused, kept for API consistency
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for FNN.
@@ -103,6 +104,7 @@ class FNN(nn.Module):
             labels: One-hot encoded labels of shape (batch_size, num_classes)
             rng: Random number generator
             n_vi_samples: Unused, kept for API consistency
+            n_train: Unused, kept for API consistency with Bayesian models
         
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:
@@ -162,7 +164,12 @@ class DropoutFNN(nn.Module):
             Class probabilities of shape (batch_size, num_classes)
         """
         x = inputs
-        rngs = jax.random.split(rng, len(self.dense_layers))
+        # Only split RNG when dropout is actually used to avoid issues with jax2onnx tracing
+        if use_dropout:
+            rngs = jax.random.split(rng, len(self.dense_layers))
+        else:
+            # Create dummy rngs when dropout is disabled (won't be used)
+            rngs = [rng] * len(self.dense_layers)
         
         for dense, dropout, rng_key in zip(self.dense_layers, self.dropout_layers, rngs):
             x = dense(x)
@@ -252,6 +259,7 @@ class DropoutFNN(nn.Module):
         labels: jnp.ndarray,
         rng: Any,
         n_vi_samples: int = 1,  # Unused, kept for API consistency
+        n_train: int | None = None,  # Unused, kept for API consistency
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for DropoutFNN.
@@ -262,6 +270,7 @@ class DropoutFNN(nn.Module):
             labels: One-hot encoded labels of shape (batch_size, num_classes)
             rng: Random number generator
             n_vi_samples: Unused, kept for API consistency
+            n_train: Unused, kept for API consistency with Bayesian models
         
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:

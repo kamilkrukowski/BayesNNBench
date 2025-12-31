@@ -1,10 +1,98 @@
-"""Utilities for toy dataset analysis and visualization."""
+"""Utilities for toy dataset generation, analysis and visualization."""
 
-from typing import Tuple
+from typing import Callable, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import multivariate_normal
+
+
+def generate_concentric_rings_dataset(
+    n_samples: int = 3000,
+    x_range: Tuple[float, float] = (-5.0, 5.0),
+    y_range: Tuple[float, float] = (-5.0, 5.0),
+    min_prob: float = 0.05,
+    max_prob: float = 0.95,
+    frequency: float = 1.8,
+    amplitude: float = 3.0,
+    seed: int = 42,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Callable[[float, float], float]]:
+    """
+    Generate a 2D dataset with concentric ring probability patterns.
+    
+    Uses a sinusoidal logit field based on radial distance to create
+    clean, regular concentric rings with alternating class probabilities.
+    
+    The probability field is: p(x,y) = σ(amplitude * sin(frequency * r))
+    where r = sqrt(x² + y²) and σ is the sigmoid function.
+    
+    Args:
+        n_samples: Number of samples to generate
+        x_range: (x_min, x_max) range for x coordinates
+        y_range: (y_min, y_max) range for y coordinates
+        min_prob: Minimum probability (clipped)
+        max_prob: Maximum probability (clipped)
+        frequency: Controls ring spacing (higher = thinner rings)
+        amplitude: Controls sharpness of transitions (higher = sharper)
+        seed: Random seed for reproducibility
+    
+    Returns:
+        X: Features of shape (n_samples, 2)
+        y: Labels (0 or 1) of shape (n_samples,)
+        y_onehot: One-hot encoded labels of shape (n_samples, 2)
+        prob_func: Function that returns P(class=1 | x, y) for any point
+    
+    Example:
+        >>> X, y, y_onehot, prob_func = generate_concentric_rings_dataset(n_samples=1000)
+        >>> print(X.shape, y.shape)
+        (1000, 2) (1000,)
+    """
+    np.random.seed(seed)
+    x_min, x_max = x_range
+    y_min, y_max = y_range
+    
+    def logit_field(x: float, y: float) -> float:
+        """Compute the logit field f(x, y) with clean concentric rings."""
+        r = np.sqrt(x**2 + y**2)
+        return amplitude * np.sin(frequency * r)
+    
+    def prob_class1(x: float, y: float) -> float:
+        """Compute P(class=1 | x, y) = σ(f(x, y)) bounded to [min_prob, max_prob]."""
+        logit = logit_field(x, y)
+        prob_sigmoid = 1.0 / (1.0 + np.exp(-logit))
+        prob = min_prob + (max_prob - min_prob) * prob_sigmoid
+        return np.clip(prob, min_prob, max_prob)
+    
+    # Generate points uniformly in the box
+    margin_x = 0.05 * (x_max - x_min)
+    margin_y = 0.05 * (y_max - y_min)
+    
+    X = []
+    y_labels = []
+    
+    for _ in range(n_samples):
+        x = np.random.uniform(x_min + margin_x, x_max - margin_x)
+        y = np.random.uniform(y_min + margin_y, y_max - margin_y)
+        X.append([x, y])
+        
+        # Sample label from Bernoulli distribution
+        prob = prob_class1(x, y)
+        label = np.random.binomial(1, prob)
+        y_labels.append(label)
+    
+    X = np.array(X)
+    y = np.array(y_labels)
+    
+    # Shuffle
+    indices = np.random.permutation(len(X))
+    X = X[indices]
+    y = y[indices]
+    
+    # One-hot encode
+    y_onehot = np.zeros((len(y), 2))
+    y_onehot[np.arange(len(y)), y] = 1
+    
+    return X, y, y_onehot, prob_class1
 
 
 def compute_bayes_optimal_boundary(

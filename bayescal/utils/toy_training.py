@@ -21,6 +21,7 @@ def train_model(
     max_grad_norm: float = 1.0,
     seed: int = 42,
     verbose: bool = True,
+    warm_up_epochs: int = 0,
 ) -> tuple[dict[str, Any], dict[str, list[float]]]:
     """
     Train a model on the toy dataset.
@@ -36,6 +37,9 @@ def train_model(
         max_grad_norm: Maximum gradient norm for clipping
         seed: Random seed
         verbose: Whether to print training progress
+        warm_up_epochs: Number of epochs for KL warmup (only for Bayesian models).
+                       Beta gradually increases from 0 to model.beta over warm_up_epochs.
+                       Helps model learn data before KL penalty kicks in.
 
     Returns:
         Tuple of (trained_params, training_history)
@@ -66,22 +70,40 @@ def train_model(
     # Training loop
     history = {"loss": [], "accuracy": []}
     rng, train_rng = jax.random.split(rng)
+    
+    # Determine if model is Bayesian (outside loop since it doesn't change)
+    is_bayesian = hasattr(model, "compute_kl_divergence") and hasattr(model, "beta")
 
     for epoch in range(epochs):
         epoch_loss = 0.0
         epoch_acc = 0.0
+        epoch_kl = 0.0
+        epoch_likelihood = 0.0
         num_batches = 0
 
         for batch_X, batch_y in batches:
             rng, batch_rng = jax.random.split(rng)
 
             # Determine n_vi_samples for Bayesian models
-            is_bayesian = hasattr(model, "compute_kl_divergence") and hasattr(
-                model, "beta"
-            )
+            # Use 1-2 samples for sharper gradients (better for learning complex patterns)
+            # More samples (5-10) reduce variance but can smooth gradients too much
+            # For complex patterns like circular boundaries, fewer samples work better
             n_vi_samples = 1 if is_bayesian else 1
-            beta = getattr(model, "beta", 1.0) if is_bayesian else 1.0
+            
+            # KL warmup for Bayesian models: gradually increase beta from 0 to final value
+            if is_bayesian and warm_up_epochs > 0:
+                base_beta = getattr(model, "beta", 1.0)
+                if epoch < warm_up_epochs:
+                    # Linear warmup: beta = (epoch / warm_up_epochs) * base_beta
+                    beta = (epoch / warm_up_epochs) * base_beta
+                else:
+                    beta = base_beta
+            else:
+                beta = getattr(model, "beta", 1.0) if is_bayesian else 1.0
 
+            # Get number of training samples for KL normalization (only for Bayesian models)
+            n_train = len(X_train) if is_bayesian else None
+            
             params, opt_state, metrics = trainer.train_step(
                 model,
                 params,
@@ -91,20 +113,54 @@ def train_model(
                 optimizer,
                 beta=beta,
                 n_vi_samples=n_vi_samples,
+                n_train=n_train,
             )
 
             epoch_loss += metrics["loss"]
             epoch_acc += metrics["accuracy"]
+            if is_bayesian:
+                epoch_kl += metrics.get("kl_loss", 0.0)
+                epoch_likelihood += metrics.get("likelihood_loss", 0.0)
             num_batches += 1
 
         history["loss"].append(epoch_loss / num_batches)
         history["accuracy"].append(epoch_acc / num_batches)
 
         if verbose and (epoch + 1) % 50 == 0:
-            print(
-                f"{model_name} - Epoch {epoch+1}/{epochs}: "
-                f"Loss={history['loss'][-1]:.4f}, Acc={history['accuracy'][-1]:.4f}"
-            )
+            # For Bayesian models, also print KL and likelihood loss
+            if is_bayesian:
+                avg_kl = epoch_kl / num_batches
+                avg_likelihood = epoch_likelihood / num_batches
+                # Get the actual beta used (may be warmup beta)
+                base_beta = getattr(model, "beta", 1.0)
+                if warm_up_epochs > 0 and epoch < warm_up_epochs:
+                    current_beta = (epoch / warm_up_epochs) * base_beta
+                    warmup_str = f" (warmup β={current_beta:.6f})"
+                else:
+                    current_beta = base_beta
+                    warmup_str = ""
+                n_train = len(X_train)
+                # Compute normalized KL for display
+                avg_kl_normalized = avg_kl / n_train if n_train > 0 else avg_kl
+                beta_kl_normalized = current_beta * avg_kl_normalized
+                
+                # Extract weight variance statistics for diagnostics
+                if hasattr(model, "get_weight_variance_stats"):
+                    sigma_stats = model.get_weight_variance_stats(params)
+                    sigma_str = f", σ_mean={sigma_stats['mean']:.4f}, σ_median={sigma_stats['median']:.4f}, σ_max={sigma_stats['max']:.4f}"
+                else:
+                    sigma_str = ""
+                
+                print(
+                    f"{model_name} - Epoch {epoch+1}/{epochs}: "
+                    f"Loss={history['loss'][-1]:.4f}, Acc={history['accuracy'][-1]:.4f}, "
+                    f"Likelihood={avg_likelihood:.4f}, KL={avg_kl:.0f}, KL_norm={avg_kl_normalized:.4f}, β*KL_norm={beta_kl_normalized:.4f}{warmup_str}{sigma_str}"
+                )
+            else:
+                print(
+                    f"{model_name} - Epoch {epoch+1}/{epochs}: "
+                    f"Loss={history['loss'][-1]:.4f}, Acc={history['accuracy'][-1]:.4f}"
+                )
 
     return params, history
 
@@ -152,6 +208,8 @@ def evaluate_model(
 
     ece = calibration.expected_calibration_error(probs, y_test_jax, num_bins=num_bins)
     mce = calibration.maximum_calibration_error(probs, y_test_jax, num_bins=num_bins)
+    tce = calibration.top_label_calibration_error(probs, y_test_jax, num_bins=num_bins)
+    ace = calibration.adaptive_calibration_error(probs, y_test_jax, num_bins=num_bins)
     brier = calibration.brier_score(probs, y_test_jax)
 
     # Calibration curve
@@ -163,6 +221,8 @@ def evaluate_model(
         "accuracy": float(accuracy),
         "ece": ece,
         "mce": mce,
+        "tce": tce,
+        "ace": ace,
         "brier": brier,
     }
 

@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
+from scipy.stats import multivariate_normal
 
 from bayescal.data import preprocessing
 
@@ -14,6 +15,9 @@ def generate_toy_dataset(
     n_samples: int = 2000,
     overlap: float = 0.5,
     seed: int = 42,
+    filter_high_confidence: bool = True,
+    min_prob: float = 0.05,
+    max_prob: float = 0.95,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate 2D toy dataset with two overlapping Gaussian classes.
@@ -25,10 +29,14 @@ def generate_toy_dataset(
     - Demonstrating Bayesian neural networks
     
     Args:
-        n_samples: Total number of samples
+        n_samples: Total number of samples (after filtering if filter_high_confidence=True)
         overlap: Controls overlap between classes (0 = no overlap, 1+ = maximum overlap).
                 Higher values increase the covariance of class 1, creating more overlap.
         seed: Random seed for reproducibility
+        filter_high_confidence: If True, filter out points in regions with very high/low
+                               class probability (keeps only ambiguous regions)
+        min_prob: Minimum probability threshold for filtering (keep points with P(class=1) >= min_prob)
+        max_prob: Maximum probability threshold for filtering (keep points with P(class=1) <= max_prob)
     
     Returns:
         X: Features of shape (n_samples, 2)
@@ -41,22 +49,79 @@ def generate_toy_dataset(
         (2000, 2) (2000,) (2000, 2)
     """
     np.random.seed(seed)
-    n_per_class = n_samples // 2
     
-    # Class 0: centered at (-1, -1) with unit covariance
+    # Define the distributions
     mean_0 = np.array([-1.0, -1.0])
     cov_0 = np.array([[1.0, 0.0], [0.0, 1.0]])
-    X_0 = np.random.multivariate_normal(mean_0, cov_0, n_per_class)
-    y_0 = np.zeros(n_per_class, dtype=int)
     
-    # Class 1: centered at (1, 1) with controlled overlap
-    # Higher overlap increases covariance, creating more spread and overlap
     mean_1 = np.array([1.0, 1.0])
     cov_1 = np.array([[1.0 + overlap, 0.0], [0.0, 1.0 + overlap]])
+    
+    if filter_high_confidence:
+        # Oversample to account for filtering
+        # We'll keep sampling until we have enough points in ambiguous regions
+        oversample_factor = 5  # Sample 5x more than needed
+        X_all = []
+        y_all = []
+        
+        print(f"Generating dataset with filtering (keeping only points with {min_prob} <= P(class=1) <= {max_prob})...")
+        
+        while len(X_all) < n_samples:
+            # Generate samples from both classes
+            n_per_class = (n_samples * oversample_factor) // 2
+            X_0 = np.random.multivariate_normal(mean_0, cov_0, n_per_class)
+            X_1 = np.random.multivariate_normal(mean_1, cov_1, n_per_class)
+            
+            # Combine
+            X_batch = np.vstack([X_0, X_1])
+            y_batch = np.hstack([np.zeros(n_per_class, dtype=int), np.ones(n_per_class, dtype=int)])
+            
+            # Compute analytical class probabilities for each point
+            # P(y=1|x) = P(x|y=1) / (P(x|y=0) + P(x|y=1))
+            # Using equal priors P(y=0) = P(y=1) = 0.5
+            log_likelihood_0 = multivariate_normal.logpdf(X_batch, mean=mean_0, cov=cov_0)
+            log_likelihood_1 = multivariate_normal.logpdf(X_batch, mean=mean_1, cov=cov_1)
+            
+            # Compute posterior using log-sum-exp trick
+            max_log = np.maximum(log_likelihood_0, log_likelihood_1)
+            log_sum = max_log + np.log(
+                np.exp(log_likelihood_0 - max_log) + np.exp(log_likelihood_1 - max_log)
+            )
+            log_posterior_1 = log_likelihood_1 - log_sum
+            prob_class_1 = np.exp(log_posterior_1)
+            
+            # Filter: keep only points in ambiguous regions
+            mask = (prob_class_1 >= min_prob) & (prob_class_1 <= max_prob)
+            X_filtered = X_batch[mask]
+            y_filtered = y_batch[mask]
+            
+            # Add to collection
+            X_all.append(X_filtered)
+            y_all.append(y_filtered)
+            
+            if len(X_all) > 0 and len(np.concatenate(X_all)) >= n_samples:
+                break
+        
+        # Combine and trim to desired size
+        X = np.vstack(X_all)
+        y = np.concatenate(y_all)
+        
+        # Trim to exact number if we have more
+        if len(X) > n_samples:
+            indices = np.random.choice(len(X), n_samples, replace=False)
+            X = X[indices]
+            y = y[indices]
+        
+        print(f"Generated {len(X)} samples after filtering (target: {n_samples})")
+    else:
+        # Original behavior: no filtering
+        n_per_class = n_samples // 2
+        X_0 = np.random.multivariate_normal(mean_0, cov_0, n_per_class)
+        y_0 = np.zeros(n_per_class, dtype=int)
+        
     X_1 = np.random.multivariate_normal(mean_1, cov_1, n_per_class)
     y_1 = np.ones(n_per_class, dtype=int)
     
-    # Combine
     X = np.vstack([X_0, X_1])
     y = np.hstack([y_0, y_1])
     
