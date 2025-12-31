@@ -41,4 +41,3 @@ def one_hot_encode(labels: jnp.ndarray, num_classes: int) -> jnp.ndarray:
         One-hot encoded array of shape (batch, num_classes)
     """
     return jnp.eye(num_classes)[labels]
-

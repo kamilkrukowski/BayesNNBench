@@ -27,8 +27,10 @@ class Settings(BaseSettings):
     batch_size: int = 4096
     num_epochs: int = 2000
     learning_rate: float = 1.0e-2
-    downsample_training_factor: float = 0.1  # Fraction of training data to use (1.0 = use all, 0.5 = use half)
-    
+    downsample_training_factor: float = (
+        0.1  # Fraction of training data to use (1.0 = use all, 0.5 = use half)
+    )
+
     # CNN settings
     # Each tuple is (kernel_x, kernel_y, num_filters, stride)
     conv_layers: tuple[tuple[int, int, int, int], ...] = (
@@ -41,8 +43,12 @@ class Settings(BaseSettings):
     prior_std: float = 1.0
     posterior_std_init: float = 0.1
     n_vi_samples: int = 1  # Number of samples for variational inference during training
-    beta: float = 0.00005  # Beta for beta-VI (KL penalty weight). Lower values allow more learning.
-    max_grad_norm: float | None = 1.0  # Maximum gradient norm for clipping. None to disable. Recommended: 1.0 for Bayesian models.
+    beta: float = (
+        0.00005  # Beta for beta-VI (KL penalty weight). Lower values allow more learning.
+    )
+    max_grad_norm: float | None = (
+        1.0  # Maximum gradient norm for clipping. None to disable. Recommended: 1.0 for Bayesian models.
+    )
 
     # Evaluation settings
     num_samples: int = 32  # For MC sampling in Bayesian models
@@ -57,4 +63,3 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-

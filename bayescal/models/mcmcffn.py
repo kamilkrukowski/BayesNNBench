@@ -129,14 +129,14 @@ class MCMCFNN:
         temperature: float = 1.0,
     ) -> jnp.ndarray:
         """Compute log posterior (unnormalized) with optional tempering.
-        
+
         The tempered posterior is:
             log p_T(θ|D) ∝ temperature * log p(θ) + log p(D|θ)
-        
+
         With temperature < 1 (cold posterior), the prior has less influence,
         making the posterior more concentrated around high-likelihood modes.
         This matches the effect of beta < 1 in variational inference.
-        
+
         Args:
             flat_params: Flattened parameter vector
             network: Flax network module
@@ -145,7 +145,7 @@ class MCMCFNN:
             y: Labels (one-hot)
             temperature: Prior temperature (default 1.0 = true posterior).
                         Use temperature < 1 for cold posterior (matches beta in VI).
-        
+
         Returns:
             Log posterior (unnormalized)
         """
@@ -217,8 +217,12 @@ class MCMCFNN:
         # Define log probability function
         def log_prob_fn(flat_params: jnp.ndarray) -> jnp.ndarray:
             return instance._log_posterior(
-                flat_params, network, init_params, X_train, y_train,
-                temperature=temperature
+                flat_params,
+                network,
+                init_params,
+                X_train,
+                y_train,
+                temperature=temperature,
             )
 
         # Initialize sampler
@@ -227,7 +231,9 @@ class MCMCFNN:
         if sampler == "nuts":
             # Use window adaptation for NUTS
             warmup = blackjax.window_adaptation(blackjax.nuts, log_prob_fn)
-            (state, parameters), _ = warmup.run(warmup_rng, flat_init, num_steps=num_warmup)
+            (state, parameters), _ = warmup.run(
+                warmup_rng, flat_init, num_steps=num_warmup
+            )
             kernel = blackjax.nuts(log_prob_fn, **parameters).step
         else:
             # HMC with fixed step size
@@ -333,6 +339,7 @@ class MCMCFNN:
         if len(input_shape) == 1:
             dummy_input = jnp.zeros((1, input_shape[0]))
         else:
-            dummy_input = jnp.zeros((1, input_shape[0] * input_shape[1] * input_shape[2]))
+            dummy_input = jnp.zeros(
+                (1, input_shape[0] * input_shape[1] * input_shape[2])
+            )
         return network.init(rng, dummy_input)
-

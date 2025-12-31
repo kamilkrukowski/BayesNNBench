@@ -20,9 +20,7 @@ class FNN(nn.Module):
 
     def setup(self) -> None:
         """Initialize model layers."""
-        self.dense_layers = [
-            nn.Dense(features=dim) for dim in self.hidden_dims
-        ]
+        self.dense_layers = [nn.Dense(features=dim) for dim in self.hidden_dims]
         self.dropout_layers = [
             nn.Dropout(rate=self.dropout_rate) for _ in self.hidden_dims
         ]
@@ -48,13 +46,13 @@ class FNN(nn.Module):
             Class probabilities of shape (batch_size, num_classes)
         """
         x = inputs
-        
-        for dense, dropout in zip(self.dense_layers, self.dropout_layers):
+
+        for dense, dropout in zip(self.dense_layers, self.dropout_layers, strict=False):
             x = dense(x)
             x = nn.relu(x)
             if self.dropout_rate > 0:
                 x = dropout(x, rng=rng, deterministic=not training)
-        
+
         logits = self.output_layer(x)
         probs = nn.softmax(logits)
         return probs
@@ -80,10 +78,12 @@ class FNN(nn.Module):
             dummy_input = jnp.zeros((1, input_shape[0]), dtype=jnp.float32)
         elif len(input_shape) == 3:
             # If image shape provided, flatten it
-            dummy_input = jnp.zeros((1, input_shape[0] * input_shape[1] * input_shape[2]), dtype=jnp.float32)
+            dummy_input = jnp.zeros(
+                (1, input_shape[0] * input_shape[1] * input_shape[2]), dtype=jnp.float32
+            )
         else:
             raise ValueError(f"Unsupported input shape: {input_shape}")
-        
+
         return self.init(rng, dummy_input, rng, training=True)
 
     def get_loss(
@@ -97,7 +97,7 @@ class FNN(nn.Module):
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for FNN.
-        
+
         Args:
             params: Model parameters
             inputs: Input data of shape (batch_size, input_dim) - flattened
@@ -105,22 +105,22 @@ class FNN(nn.Module):
             rng: Random number generator
             n_vi_samples: Unused, kept for API consistency
             n_train: Unused, kept for API consistency with Bayesian models
-        
+
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:
             - accuracy: Classification accuracy
         """
         probs = self.apply(params, inputs=inputs, rng=rng, training=True, n_samples=1)
-        
+
         # Cross-entropy loss: -sum(y * log(p))
         log_probs = jnp.log(probs + 1e-8)
         loss = -jnp.sum(labels * log_probs, axis=-1).mean()
-        
+
         # Compute accuracy
         accuracy = (probs.argmax(axis=-1) == labels.argmax(axis=-1)).mean()
-        
+
         metrics = {"accuracy": accuracy}
-        
+
         return loss, metrics
 
 
@@ -138,9 +138,7 @@ class DropoutFNN(nn.Module):
 
     def setup(self) -> None:
         """Initialize model layers."""
-        self.dense_layers = [
-            nn.Dense(features=dim) for dim in self.hidden_dims
-        ]
+        self.dense_layers = [nn.Dense(features=dim) for dim in self.hidden_dims]
         self.dropout_layers = [
             nn.Dropout(rate=self.dropout_rate) for _ in self.hidden_dims
         ]
@@ -170,14 +168,16 @@ class DropoutFNN(nn.Module):
         else:
             # Create dummy rngs when dropout is disabled (won't be used)
             rngs = [rng] * len(self.dense_layers)
-        
-        for dense, dropout, rng_key in zip(self.dense_layers, self.dropout_layers, rngs):
+
+        for dense, dropout, rng_key in zip(
+            self.dense_layers, self.dropout_layers, rngs, strict=False
+        ):
             x = dense(x)
             x = nn.relu(x)
             # deterministic=False means apply dropout
             # deterministic=True means no dropout
             x = dropout(x, rng=rng_key, deterministic=not use_dropout)
-        
+
         logits = self.output_layer(x)
         probs = nn.softmax(logits)
         return probs
@@ -207,19 +207,19 @@ class DropoutFNN(nn.Module):
             # Single sample: use dropout only during training
             use_dropout = training
             return self._forward_single(inputs, rng, use_dropout=use_dropout)
-        
+
         # Multiple samples: Monte Carlo Dropout
         # Always use dropout to get predictive posterior, even at inference
         # Use vmap for efficient parallel sampling
         sample_rngs = jax.random.split(rng, n_samples)
-        
+
         # Vectorize over samples using vmap
         def single_sample(sample_rng):
             return self._forward_single(inputs, sample_rng, use_dropout=True)
-        
+
         # vmap over the rng dimension
         all_probs = jax.vmap(single_sample)(sample_rngs)
-        
+
         # Average: (n_samples, batch_size, num_classes) -> (batch_size, num_classes)
         mean_probs = jnp.mean(all_probs, axis=0)
         return mean_probs
@@ -245,10 +245,12 @@ class DropoutFNN(nn.Module):
             dummy_input = jnp.zeros((1, input_shape[0]), dtype=jnp.float32)
         elif len(input_shape) == 3:
             # If image shape provided, flatten it
-            dummy_input = jnp.zeros((1, input_shape[0] * input_shape[1] * input_shape[2]), dtype=jnp.float32)
+            dummy_input = jnp.zeros(
+                (1, input_shape[0] * input_shape[1] * input_shape[2]), dtype=jnp.float32
+            )
         else:
             raise ValueError(f"Unsupported input shape: {input_shape}")
-        
+
         rng1, rng2 = jax.random.split(rng)
         return self.init(rng1, dummy_input, rng2, training=True)
 
@@ -263,7 +265,7 @@ class DropoutFNN(nn.Module):
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for DropoutFNN.
-        
+
         Args:
             params: Model parameters
             inputs: Input data of shape (batch_size, input_dim) - flattened
@@ -271,21 +273,20 @@ class DropoutFNN(nn.Module):
             rng: Random number generator
             n_vi_samples: Unused, kept for API consistency
             n_train: Unused, kept for API consistency with Bayesian models
-        
+
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:
             - accuracy: Classification accuracy
         """
         probs = self.apply(params, inputs=inputs, rng=rng, training=True, n_samples=1)
-        
+
         # Cross-entropy loss: -sum(y * log(p))
         log_probs = jnp.log(probs + 1e-8)
         loss = -jnp.sum(labels * log_probs, axis=-1).mean()
-        
+
         # Compute accuracy
         accuracy = (probs.argmax(axis=-1) == labels.argmax(axis=-1)).mean()
-        
-        metrics = {"accuracy": accuracy}
-        
-        return loss, metrics
 
+        metrics = {"accuracy": accuracy}
+
+        return loss, metrics

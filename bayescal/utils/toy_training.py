@@ -70,7 +70,7 @@ def train_model(
     # Training loop
     history = {"loss": [], "accuracy": []}
     rng, train_rng = jax.random.split(rng)
-    
+
     # Determine if model is Bayesian (outside loop since it doesn't change)
     is_bayesian = hasattr(model, "compute_kl_divergence") and hasattr(model, "beta")
 
@@ -89,7 +89,7 @@ def train_model(
             # More samples (5-10) reduce variance but can smooth gradients too much
             # For complex patterns like circular boundaries, fewer samples work better
             n_vi_samples = 1 if is_bayesian else 1
-            
+
             # KL warmup for Bayesian models: gradually increase beta from 0 to final value
             if is_bayesian and warm_up_epochs > 0:
                 base_beta = getattr(model, "beta", 1.0)
@@ -103,7 +103,7 @@ def train_model(
 
             # Get number of training samples for KL normalization (only for Bayesian models)
             n_train = len(X_train) if is_bayesian else None
-            
+
             params, opt_state, metrics = trainer.train_step(
                 model,
                 params,
@@ -143,14 +143,14 @@ def train_model(
                 # Compute normalized KL for display
                 avg_kl_normalized = avg_kl / n_train if n_train > 0 else avg_kl
                 beta_kl_normalized = current_beta * avg_kl_normalized
-                
+
                 # Extract weight variance statistics for diagnostics
                 if hasattr(model, "get_weight_variance_stats"):
                     sigma_stats = model.get_weight_variance_stats(params)
                     sigma_str = f", σ_mean={sigma_stats['mean']:.4f}, σ_median={sigma_stats['median']:.4f}, σ_max={sigma_stats['max']:.4f}"
                 else:
                     sigma_str = ""
-                
+
                 print(
                     f"{model_name} - Epoch {epoch+1}/{epochs}: "
                     f"Loss={history['loss'][-1]:.4f}, Acc={history['accuracy'][-1]:.4f}, "
@@ -227,4 +227,3 @@ def evaluate_model(
     }
 
     return probs, y_test_jax, metrics, fraction_of_positives, mean_predicted_value
-

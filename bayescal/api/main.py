@@ -17,4 +17,3 @@ app.include_router(endpoints.router)
 async def root() -> dict[str, str]:
     """Root endpoint."""
     return {"message": "BayesCal API"}
-

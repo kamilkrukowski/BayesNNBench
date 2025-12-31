@@ -12,7 +12,6 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-from flax import linen as nn
 
 from bayescal.models.fnn import FNN
 
@@ -278,4 +277,3 @@ class LaplaceFNN:
             Predicted probabilities
         """
         return self(inputs, rng, training=training, n_samples=n_samples)
-

@@ -84,7 +84,7 @@ def plot_calibration_curves_comparison(
             - 'label': Model label string
             - 'color': Color for the plot (optional)
             - 'marker': Marker style (optional, default 'o')
-            
+
             Legacy support (if predictions/labels not provided):
             - 'mpv': Mean predicted value array (pre-computed)
             - 'fop': Fraction of positives array (pre-computed)
@@ -93,7 +93,7 @@ def plot_calibration_curves_comparison(
         num_bins: Number of bins for calibration curve (default 15)
     """
     from bayescal.evaluation import calibration
-    
+
     # Default colors and markers if not provided
     default_colors = ["#F18F01", "#A23B72", "#2E86AB", "#C73E1D", "#6A994E"]
     default_markers = ["o", "s", "^", "D", "v"]
@@ -104,17 +104,17 @@ def plot_calibration_curves_comparison(
         color = result.get("color", default_colors[i % len(default_colors)])
         marker = result.get("marker", default_markers[i % len(default_markers)])
         label = result.get("label", f"Model {i+1}")
-        
+
         # Compute calibration curve based on metric
         if "predictions" in result and "labels" in result:
             predictions = result["predictions"]
             labels = result["labels"]
-            
+
             # For binary classification, use P(class=1) directly to get full [0, 1] range
             # For multiclass, use top-label confidence
             n_classes = predictions.shape[1] if len(predictions.shape) > 1 else 2
             strategy = "binary_class1" if n_classes == 2 else "top_label"
-            
+
             # Use adaptive binning for ACE, fixed-width for ECE/TCE
             if metric == "ace":
                 fop, mpv = calibration.adaptive_calibration_curve(
@@ -123,13 +123,17 @@ def plot_calibration_curves_comparison(
             else:
                 # ECE, TCE, and 'all' use fixed-width bins
                 fop, mpv = calibration.calibration_curve(
-                    predictions, labels, num_bins=num_bins, prune_small_bins=False, strategy=strategy
+                    predictions,
+                    labels,
+                    num_bins=num_bins,
+                    prune_small_bins=False,
+                    strategy=strategy,
                 )
         else:
             # Legacy support: use pre-computed mpv/fop
             mpv = result.get("mpv", np.array([]))
             fop = result.get("fop", np.array([]))
-        
+
         # Build metric string based on selected metric
         if metric == "all":
             ece = result.get("ece", 0.0)
@@ -163,16 +167,27 @@ def plot_calibration_curves_comparison(
         )
 
     # Perfect calibration line
-    ax.plot([0.0, 1], [0.0, 1], "k--", label="Perfect calibration", linewidth=2, alpha=0.7)
+    ax.plot(
+        [0.0, 1], [0.0, 1], "k--", label="Perfect calibration", linewidth=2, alpha=0.7
+    )
 
     ax.set_xlabel("Mean Predicted Probability", fontsize=12)
     ax.set_ylabel("Fraction of Positives", fontsize=12)
-    
+
     # Title based on metric
-    metric_names = {"ece": "ECE (Fixed Bins)", "ace": "ACE (Adaptive Bins)", "tce": "TCE (Fixed Bins)", "all": "All Metrics (Fixed Bins)"}
+    metric_names = {
+        "ece": "ECE (Fixed Bins)",
+        "ace": "ACE (Adaptive Bins)",
+        "tce": "TCE (Fixed Bins)",
+        "all": "All Metrics (Fixed Bins)",
+    }
     title_metric = metric_names.get(metric, "ECE")
-    ax.set_title(f"Calibration Curves Comparison - {title_metric}", fontsize=14, fontweight="bold")
-    
+    ax.set_title(
+        f"Calibration Curves Comparison - {title_metric}",
+        fontsize=14,
+        fontweight="bold",
+    )
+
     ax.legend(loc="lower right", fontsize=10 if metric == "all" else 11)
     ax.grid(True, alpha=0.3)
     ax.set_xlim([0.0, 1.0])
@@ -181,7 +196,9 @@ def plot_calibration_curves_comparison(
     if figures_dir:
         suffix = f"_{metric}" if metric != "ece" else ""
         plt.savefig(
-            figures_dir / f"calibration_curves_comparison{suffix}.png", dpi=150, bbox_inches="tight"
+            figures_dir / f"calibration_curves_comparison{suffix}.png",
+            dpi=150,
+            bbox_inches="tight",
         )
     plt.show()
 
@@ -226,9 +243,7 @@ def plot_single_sample_predictions(
     # Create a grid
     x_min, x_max = X_test[:, 0].min() - 1, X_test[:, 0].max() + 1
     y_min, y_max = X_test[:, 1].min() - 1, X_test[:, 1].max() + 1
-    xx, yy = np.meshgrid(
-        np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100)
-    )
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100))
     grid_points = np.c_[xx.ravel(), yy.ravel()]
     grid_jax = jnp.array(grid_points)
 
@@ -250,7 +265,9 @@ def plot_single_sample_predictions(
         contour = axes[i].contourf(
             xx, yy, probs_class1, levels=20, cmap="coolwarm", alpha=0.8
         )
-        axes[i].contour(xx, yy, probs_class1, levels=[0.5], colors="black", linewidths=2)
+        axes[i].contour(
+            xx, yy, probs_class1, levels=[0.5], colors="black", linewidths=2
+        )
         axes[i].scatter(
             X_test_plot[:, 0],
             X_test_plot[:, 1],
@@ -374,7 +391,8 @@ def plot_predictive_posterior(
     y_min, y_max = X_test[:, 1].min(), X_test[:, 1].max()
     grid_resolution = 60  # Reduced from 100 to save memory
     xx, yy = np.meshgrid(
-        np.linspace(x_min, x_max, grid_resolution), np.linspace(y_min, y_max, grid_resolution)
+        np.linspace(x_min, x_max, grid_resolution),
+        np.linspace(y_min, y_max, grid_resolution),
     )
     grid_points = np.c_[xx.ravel(), yy.ravel()]
 
@@ -398,11 +416,26 @@ def plot_predictive_posterior(
 
     # Probability contour with fixed color scale for comparison across plots
     levels = np.linspace(vmin, vmax, 21)
-    contour = ax.contourf(xx, yy, probs_class1, levels=levels, cmap="coolwarm", alpha=0.8, vmin=vmin, vmax=vmax)
+    contour = ax.contourf(
+        xx,
+        yy,
+        probs_class1,
+        levels=levels,
+        cmap="coolwarm",
+        alpha=0.8,
+        vmin=vmin,
+        vmax=vmax,
+    )
 
     # Overlay decision boundary (where P(Class=1) = 0.5)
     boundary_contour = ax.contour(
-        xx, yy, probs_class1, levels=[0.5], colors="black", linewidths=2.5, linestyles="-"
+        xx,
+        yy,
+        probs_class1,
+        levels=[0.5],
+        colors="black",
+        linewidths=2.5,
+        linestyles="-",
     )
 
     # Scatter test points
@@ -422,7 +455,9 @@ def plot_predictive_posterior(
     ax.set_xlabel("Feature 1", fontsize=12)
     ax.set_ylabel("Feature 2", fontsize=12)
     ax.set_title(
-        f"{model_name}: Predictive Probability P(Class=1)", fontsize=12, fontweight="bold"
+        f"{model_name}: Predictive Probability P(Class=1)",
+        fontsize=12,
+        fontweight="bold",
     )
 
     # Colorbar for probability - use fig.colorbar when ax is provided
@@ -448,7 +483,8 @@ def plot_predictive_posterior(
         if figures_dir:
             model_name_safe = model_name.lower().replace(" ", "_")
             plt.savefig(
-                figures_dir / f"{model_name_safe}_predictive_posterior_mc{n_samples}.png",
+                figures_dir
+                / f"{model_name_safe}_predictive_posterior_mc{n_samples}.png",
                 dpi=150,
                 bbox_inches="tight",
             )
@@ -496,7 +532,7 @@ def plot_uncertainty(
     # Default vmax to max binary entropy: log(2) ≈ 0.693
     if vmax is None:
         vmax = np.log(2)
-    
+
     # Subsample test set for visualization
     if len(X_test) > n_plot_points:
         _, X_test_plot, _, y_test_plot = train_test_split(
@@ -514,7 +550,8 @@ def plot_uncertainty(
     y_min, y_max = X_test[:, 1].min(), X_test[:, 1].max()
     grid_resolution = 60  # Reduced from 100 to save memory
     xx, yy = np.meshgrid(
-        np.linspace(x_min, x_max, grid_resolution), np.linspace(y_min, y_max, grid_resolution)
+        np.linspace(x_min, x_max, grid_resolution),
+        np.linspace(y_min, y_max, grid_resolution),
     )
     grid_points = np.c_[xx.ravel(), yy.ravel()]
 
@@ -550,14 +587,29 @@ def plot_uncertainty(
     if log_scale:
         # Apply log transform: log(1 + entropy) to handle zeros
         # This emphasizes differences in low-entropy regions
-        entropy_plot = np.log1p(entropy * 10)  # Scale by 10 before log for better visibility
+        entropy_plot = np.log1p(
+            entropy * 10
+        )  # Scale by 10 before log for better visibility
         plot_vmin = np.log1p(vmin * 10) if vmin is not None else 0
-        plot_vmax = np.log1p(vmax * 10) if vmax is not None else np.log1p(np.log(2) * 10)
+        plot_vmax = (
+            np.log1p(vmax * 10) if vmax is not None else np.log1p(np.log(2) * 10)
+        )
         levels = np.linspace(plot_vmin, plot_vmax, 21)
-        contour = ax.contourf(xx, yy, entropy_plot, levels=levels, cmap="viridis", alpha=0.8)
+        contour = ax.contourf(
+            xx, yy, entropy_plot, levels=levels, cmap="viridis", alpha=0.8
+        )
     else:
         levels = np.linspace(vmin, vmax, 21)
-        contour = ax.contourf(xx, yy, entropy, levels=levels, cmap="viridis", alpha=0.8, vmin=vmin, vmax=vmax)
+        contour = ax.contourf(
+            xx,
+            yy,
+            entropy,
+            levels=levels,
+            cmap="viridis",
+            alpha=0.8,
+            vmin=vmin,
+            vmax=vmax,
+        )
     ax.scatter(
         X_test_plot[:, 0],
         X_test_plot[:, 1],
@@ -573,16 +625,18 @@ def plot_uncertainty(
     ax.set_ylabel("Feature 2", fontsize=12)
     title_suffix = " (Log Scale)" if log_scale else ""
     ax.set_title(
-        f"{model_name}: Predictive Uncertainty (Entropy){title_suffix}", fontsize=12, fontweight="bold"
+        f"{model_name}: Predictive Uncertainty (Entropy){title_suffix}",
+        fontsize=12,
+        fontweight="bold",
     )
-    
+
     # Colorbar - use fig.colorbar when ax is provided
     colorbar_label = "log(1 + 10×Entropy)" if log_scale else "Entropy (bits)"
     if created_figure:
         plt.colorbar(contour, ax=ax, label=colorbar_label)
     else:
         fig.colorbar(contour, ax=ax, label=colorbar_label)
-    
+
     # Only save/show if we created the figure
     if created_figure:
         plt.tight_layout()
@@ -596,4 +650,3 @@ def plot_uncertainty(
         plt.show()
 
     return ax
-

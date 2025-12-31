@@ -69,4 +69,3 @@ def detect_ood(
     threshold = jnp.percentile(in_distribution_scores, threshold_percentile)
     predictions = ood_scores > threshold
     return float(threshold), predictions
-

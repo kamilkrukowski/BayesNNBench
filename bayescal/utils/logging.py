@@ -20,11 +20,6 @@ def setup_logging(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(),
-            *(
-                [logging.FileHandler(log_dir / "training.log")]
-                if log_dir
-                else []
-            ),
+            *([logging.FileHandler(log_dir / "training.log")] if log_dir else []),
         ],
     )
-

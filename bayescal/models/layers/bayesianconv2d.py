@@ -77,23 +77,23 @@ class BayesianConv2D(nn.Module):
         def training_forward(inputs, rng, mean, log_std):
             """
             Training mode: Local Reparameterization Trick (LRT) for CNNs.
-            
+
             Instead of sampling weights and then convolving, we directly sample
             the output activations. This is more memory efficient and faster.
-            
+
             For conv(x, W) where W ~ N(μ, σ²) with independent weights:
             - Each output element y[i,j,k] = Σ_{patch} x[patch] * W[patch, k]
             - Mean: E[y[i,j,k]] = Σ_{patch} x[patch] * μ[patch, k] = conv(x, μ)
             - Variance: Var[y[i,j,k]] = Σ_{patch} x[patch]² * σ²[patch, k] = conv(x², σ²)
               (variance of sum of independent RVs = sum of variances)
             - Sample: mean + sqrt(variance) * ε
-            
+
             This works because convolution applies the same operation over patches,
             and the variance computation correctly accounts for the patch-wise summation.
             """
             std = jnp.exp(log_std)
-            std_sq = std ** 2  # Variance of weights
-            
+            std_sq = std**2  # Variance of weights
+
             # Compute mean output: conv(inputs, mean_weights)
             # This computes E[y] = Σ_{patch} x[patch] * μ[patch]
             mean_output = jax.lax.conv_general_dilated(
@@ -103,25 +103,27 @@ class BayesianConv2D(nn.Module):
                 padding=padding,
                 dimension_numbers=dimension_numbers,
             )
-            
+
             # Compute variance output: conv(inputs², std²)
             # This computes Var[y] = Σ_{patch} x[patch]² * σ²[patch]
             # The element-wise square of inputs is crucial: variance scales with x²
-            inputs_sq = inputs ** 2
+            inputs_sq = inputs**2
             var_output = jax.lax.conv_general_dilated(
                 inputs_sq,
                 std_sq,
-                    window_strides=self.strides,
-                    padding=padding,
-                    dimension_numbers=dimension_numbers,
+                window_strides=self.strides,
+                padding=padding,
+                dimension_numbers=dimension_numbers,
             )
-            
+
             # Sample output activations: mean + sqrt(variance) * epsilon
-            std_output = jnp.sqrt(var_output + 1e-8)  # Add small epsilon for numerical stability
+            std_output = jnp.sqrt(
+                var_output + 1e-8
+            )  # Add small epsilon for numerical stability
             output_shape = mean_output.shape
             eps = jax.random.normal(rng, output_shape)
             sampled_output = mean_output + std_output * eps
-            
+
             return sampled_output
 
         def mean_forward(inputs, mean):
@@ -141,9 +143,8 @@ class BayesianConv2D(nn.Module):
             lambda: training_forward(inputs, rng, mean, log_std),
             lambda: mean_forward(inputs, mean),
         )
-        
+
         # Add bias
         out = out + bias
-        
-        return out
 
+        return out

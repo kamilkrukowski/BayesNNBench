@@ -9,4 +9,3 @@ router = APIRouter(prefix="/api/v1", tags=["models"])
 async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy"}
-

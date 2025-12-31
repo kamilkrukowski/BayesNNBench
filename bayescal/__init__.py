@@ -2,12 +2,7 @@
 
 __version__ = "0.1.0"
 
-from bayescal import config
-from bayescal import data
-from bayescal import models
-from bayescal import training
-from bayescal import evaluation
-from bayescal import utils
+from bayescal import config, data, evaluation, models, training, utils
 
 __all__ = [
     "config",
@@ -17,4 +12,3 @@ __all__ = [
     "evaluation",
     "utils",
 ]
-

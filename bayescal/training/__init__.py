@@ -1,6 +1,5 @@
 """Training utilities."""
 
-from bayescal.training import trainer, optimizers
+from bayescal.training import optimizers, trainer
 
 __all__ = ["trainer", "optimizers"]
-

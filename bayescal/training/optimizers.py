@@ -28,7 +28,7 @@ def get_optimizer(
         base_optimizer = optax.adamw(learning_rate)
     else:
         raise ValueError(f"Unknown optimizer type: {optimizer_type}")
-    
+
     # Add gradient clipping if specified
     if max_grad_norm is not None:
         return optax.chain(

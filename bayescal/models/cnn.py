@@ -16,7 +16,10 @@ class CNN(nn.Module):
     """
 
     # Each tuple is (kernel_x, kernel_y, num_filters, stride)
-    conv_layers_config: tuple[tuple[int, int, int, int], ...] = ((5, 5, 32, 1), (5, 5, 64, 1))
+    conv_layers_config: tuple[tuple[int, int, int, int], ...] = (
+        (5, 5, 32, 1),
+        (5, 5, 64, 1),
+    )
     num_classes: int = 10
     num_groups: int = 8  # Number of groups for GroupNorm
 
@@ -27,7 +30,7 @@ class CNN(nn.Module):
                 features=num_filters,
                 kernel_size=(kernel_x, kernel_y),
                 strides=(stride, stride),
-                padding="SAME"
+                padding="SAME",
             )
             for kernel_x, kernel_y, num_filters, stride in self.conv_layers_config
         ]
@@ -59,8 +62,8 @@ class CNN(nn.Module):
             Class probabilities of shape (batch_size, num_classes)
         """
         x = inputs
-        
-        for i, (conv, norm) in enumerate(zip(self.conv_layers, self.norm_layers)):
+
+        for i, (conv, norm) in enumerate(zip(self.conv_layers, self.norm_layers, strict=False)):
             x = conv(x)
             x = norm(x)
             x = nn.relu(x)
@@ -70,7 +73,7 @@ class CNN(nn.Module):
                 h, w = x.shape[1], x.shape[2]
                 if h > 1 and w > 1:
                     x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
-        
+
         # Global average pooling: (batch, h, w, c) -> (batch, c)
         # Ensure we have valid spatial dimensions
         if x.shape[1] > 0 and x.shape[2] > 0:
@@ -78,7 +81,7 @@ class CNN(nn.Module):
         else:
             # If dimensions collapsed, just take the first spatial element
             x = x[:, 0, 0, :]
-        
+
         logits = self.output_layer(x)
         probs = nn.softmax(logits)
         return probs
@@ -110,7 +113,7 @@ class CNN(nn.Module):
                 raise ValueError(f"Unknown flattened input shape: {input_shape}")
         else:
             dummy_input = jnp.zeros((1, *input_shape), dtype=jnp.float32)
-        
+
         return self.init(rng, dummy_input, rng, training=True)
 
     def get_loss(
@@ -123,29 +126,29 @@ class CNN(nn.Module):
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for CNN.
-        
+
         Args:
             params: Model parameters
             inputs: Input data of shape (batch_size, height, width, channels)
             labels: One-hot encoded labels of shape (batch_size, num_classes)
             rng: Random number generator (unused, kept for API consistency)
             n_vi_samples: Unused, kept for API consistency
-        
+
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:
             - accuracy: Classification accuracy
         """
         probs = self.apply(params, inputs=inputs, rng=rng, training=True, n_samples=1)
-        
+
         # Cross-entropy loss: -sum(y * log(p))
         log_probs = jnp.log(probs + 1e-8)
         loss = -jnp.sum(labels * log_probs, axis=-1).mean()
-        
+
         # Compute accuracy
         accuracy = (probs.argmax(axis=-1) == labels.argmax(axis=-1)).mean()
-        
+
         metrics = {"accuracy": accuracy}
-        
+
         return loss, metrics
 
 
@@ -158,7 +161,10 @@ class DropoutCNN(nn.Module):
     """
 
     # Each tuple is (kernel_x, kernel_y, num_filters, stride)
-    conv_layers_config: tuple[tuple[int, int, int, int], ...] = ((5, 5, 32, 1), (5, 5, 64, 1))
+    conv_layers_config: tuple[tuple[int, int, int, int], ...] = (
+        (5, 5, 32, 1),
+        (5, 5, 64, 1),
+    )
     num_classes: int = 10
     num_groups: int = 8  # Number of groups for GroupNorm
     dropout_rate: float = 0.2
@@ -170,7 +176,7 @@ class DropoutCNN(nn.Module):
                 features=num_filters,
                 kernel_size=(kernel_x, kernel_y),
                 strides=(stride, stride),
-                padding="SAME"
+                padding="SAME",
             )
             for kernel_x, kernel_y, num_filters, stride in self.conv_layers_config
         ]
@@ -203,10 +209,10 @@ class DropoutCNN(nn.Module):
         """
         x = inputs
         rngs = jax.random.split(rng, len(self.conv_layers))
-        
-        for i, (conv, norm, dropout, rng_key) in enumerate(zip(
-            self.conv_layers, self.norm_layers, self.dropout_layers, rngs
-        )):
+
+        for i, (conv, norm, dropout, rng_key) in enumerate(
+            zip(self.conv_layers, self.norm_layers, self.dropout_layers, rngs, strict=False)
+        ):
             x = conv(x)
             x = norm(x)
             x = nn.relu(x)
@@ -219,7 +225,7 @@ class DropoutCNN(nn.Module):
             # deterministic=False means apply dropout
             # deterministic=True means no dropout
             x = dropout(x, rng=rng_key, deterministic=not use_dropout)
-        
+
         # Global average pooling: (batch, h, w, c) -> (batch, c)
         # Ensure we have valid spatial dimensions
         if x.shape[1] > 0 and x.shape[2] > 0:
@@ -227,7 +233,7 @@ class DropoutCNN(nn.Module):
         else:
             # If dimensions collapsed, just take the first spatial element
             x = x[:, 0, 0, :]
-        
+
         logits = self.output_layer(x)
         probs = nn.softmax(logits)
         return probs
@@ -257,19 +263,19 @@ class DropoutCNN(nn.Module):
             # Single sample: use dropout only during training
             use_dropout = training
             return self._forward_single(inputs, rng, use_dropout=use_dropout)
-        
+
         # Multiple samples: Monte Carlo Dropout
         # Always use dropout to get predictive posterior, even at inference
         # Use vmap for efficient parallel sampling
         sample_rngs = jax.random.split(rng, n_samples)
-        
+
         # Vectorize over samples using vmap
         def single_sample(sample_rng):
             return self._forward_single(inputs, sample_rng, use_dropout=True)
-        
+
         # vmap over the rng dimension
         all_probs = jax.vmap(single_sample)(sample_rngs)
-        
+
         # Average: (n_samples, batch_size, num_classes) -> (batch_size, num_classes)
         mean_probs = jnp.mean(all_probs, axis=0)
         return mean_probs
@@ -301,7 +307,7 @@ class DropoutCNN(nn.Module):
                 raise ValueError(f"Unknown flattened input shape: {input_shape}")
         else:
             dummy_input = jnp.zeros((1, *input_shape), dtype=jnp.float32)
-        
+
         rng1, rng2 = jax.random.split(rng)
         return self.init(rng1, dummy_input, rng2, training=True)
 
@@ -315,28 +321,27 @@ class DropoutCNN(nn.Module):
     ) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
         """
         Compute cross-entropy loss for DropoutCNN.
-        
+
         Args:
             params: Model parameters
             inputs: Input data of shape (batch_size, height, width, channels)
             labels: One-hot encoded labels of shape (batch_size, num_classes)
             rng: Random number generator
             n_vi_samples: Unused, kept for API consistency
-        
+
         Returns:
             Tuple of (loss, metrics_dict) where metrics includes:
             - accuracy: Classification accuracy
         """
         probs = self.apply(params, inputs=inputs, rng=rng, training=True, n_samples=1)
-        
+
         # Cross-entropy loss: -sum(y * log(p))
         log_probs = jnp.log(probs + 1e-8)
         loss = -jnp.sum(labels * log_probs, axis=-1).mean()
-        
+
         # Compute accuracy
         accuracy = (probs.argmax(axis=-1) == labels.argmax(axis=-1)).mean()
-        
-        metrics = {"accuracy": accuracy}
-        
-        return loss, metrics
 
+        metrics = {"accuracy": accuracy}
+
+        return loss, metrics

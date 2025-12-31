@@ -34,7 +34,7 @@ def export_model(
         seed: Random seed for inference (used to test model)
     """
     output_path = Path(output_path)
-    
+
     # Create model-specific directory structure: {model_name}/
     if output_path.suffix == "":
         # output_path is already a directory
@@ -42,7 +42,7 @@ def export_model(
     else:
         # output_path is a file, create directory based on model name in same location
         model_dir = output_path.parent / model_name.lower()
-    
+
     model_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir = (model_dir / "checkpoints").resolve()
     metadata_file = model_dir / "model.json"
@@ -112,7 +112,7 @@ def load_model(
         Tuple of (parameters dictionary, metadata dictionary)
     """
     checkpoint_dir = Path(checkpoint_dir).resolve()
-    
+
     # Load checkpoint using Orbax
     options = CheckpointManagerOptions(create=False)
     with CheckpointManager(checkpoint_dir, options=options) as checkpoint_manager:
@@ -121,12 +121,12 @@ def load_model(
             step = checkpoint_manager.latest_step()
             if step is None:
                 raise ValueError(f"No checkpoint found in {checkpoint_dir}")
-        
+
         # Restore checkpoint - CheckpointManager knows the object is saved using
         # standard pytree logic, so we can restore directly
         restored = checkpoint_manager.restore(step)
         params = restored["params"]
-    
+
     print(f"Loaded checkpoint from step {step} in {checkpoint_dir}")
 
     # Load metadata
@@ -135,9 +135,9 @@ def load_model(
         metadata_path = checkpoint_dir.parent / "model.json"
     else:
         metadata_path = Path(metadata_path)
-    
+
     if metadata_path.exists():
-        with open(metadata_path, "r") as f:
+        with open(metadata_path) as f:
             metadata = json.load(f)
     else:
         metadata = {}
